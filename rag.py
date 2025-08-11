@@ -13,6 +13,7 @@ from ibm_watsonx_ai.foundation_models.schema import TextChatParameters
 from fastapi.responses import RedirectResponse
 import uvicorn
 import python_multipart
+from dotenv import load_dotenv
 
 
 app = FastAPI(title="RAG Chatbot with Multi-File Support")
@@ -23,6 +24,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # In-memory state (for demo; use persistent store for production)
 processed_files = []
@@ -122,8 +124,8 @@ async def upload_files(files: List[UploadFile] = File(...)):
 async def chat(request: ChatRequest):
     if not all([request.api_key, request.project_id, request.model_id]):
         raise HTTPException(status_code=400, detail="Missing required fields.")
-    if not processed_files:
-        raise HTTPException(status_code=400, detail="No files processed.")
+    # if not processed_files:
+    #     raise HTTPException(status_code=400, detail="No files processed.")
     chat_history.append({"role": "user", "content": request.message})
     try:
         results = collection.query(query_texts=[request.message], n_results=3)
@@ -137,14 +139,28 @@ async def chat(request: ChatRequest):
             {"role": "system", "content": system_message},
             {"role": "user", "content": f"{context}\n\nQuestion: {request.message}"}
         ]
-        credentials = Credentials(url=request.url, api_key=request.api_key)
+
+
+        # Get credentials from request or fall back to environment variables
+        load_dotenv()
+        
+        url = request.url or os.getenv("WATSONX_URL")
+        api_key = request.api_key or os.getenv("WATSONX_API_KEY")
+        model_id = request.model_id or os.getenv("WATSONX_MODEL_ID")
+        project_id = request.project_id or os.getenv("WATSONX_PROJECT_ID")
+        
+        if not all([url, api_key, model_id, project_id]):
+            raise HTTPException(status_code=400, detail="Missing credentials. Provide them in the request or set environment variables.")
+            
+        credentials = Credentials(url=url, api_key=api_key)
         params = TextChatParameters(temperature=0.7)
         model = ModelInference(
-            model_id=request.model_id,
+            model_id=model_id,
             credentials=credentials,
-            project_id=request.project_id,
+            project_id=project_id,
             params=params
         )
+        
         start_time = time.time()
         response = model.chat(messages=messages)
         end_time = time.time()
@@ -186,8 +202,7 @@ async def system_info():
 
 @app.get("/")
 async def root():
-    return {"message": "You RAG is Working!"}
-
+    return RedirectResponse(url="/docs")
 
 # # Render deployment needs access to the app directly
 # # The port is automatically set by Render via the PORT environment variable
@@ -195,3 +210,4 @@ async def root():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
