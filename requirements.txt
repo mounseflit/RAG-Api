@@ -5,6 +5,7 @@ pysqlite3-binary
 chromadb>=1.0.15
 pypdf>=4.0.0
 python-docx>=1.2.0
+python-dotenv
 openpyxl>=3.1.0
 pandas>=2.2.0
 pytesseract>=0.3.13
