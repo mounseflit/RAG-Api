@@ -190,9 +190,9 @@ async def root():
     return {"message": "You RAG is Working!"}
 
 
-# Render deployment needs access to the app directly
-# The port is automatically set by Render via the PORT environment variable
-if __name__ == "__main__":
+# # Render deployment needs access to the app directly
+# # The port is automatically set by Render via the PORT environment variable
+# if __name__ == "__main__":
 
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+#     port = int(os.environ.get("PORT", 8000))
+#     uvicorn.run(app, host="0.0.0.0", port=port)
