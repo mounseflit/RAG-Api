@@ -12,8 +12,7 @@ from ibm_watsonx_ai.foundation_models import ModelInference
 from ibm_watsonx_ai.foundation_models.schema import TextChatParameters
 from fastapi.responses import RedirectResponse
 import uvicorn
-
-
+import python_multipart
 
 
 app = FastAPI(title="RAG Chatbot with Multi-File Support")
