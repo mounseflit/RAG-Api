@@ -1,0 +1,194 @@
+import time
+import os
+import tempfile
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List
+import chromadb
+from file_processor import process_file
+from ibm_watsonx_ai import Credentials
+from ibm_watsonx_ai.foundation_models import ModelInference
+from ibm_watsonx_ai.foundation_models.schema import TextChatParameters
+from fastapi.responses import RedirectResponse
+
+
+
+
+app = FastAPI(title="RAG Chatbot with Multi-File Support")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# In-memory state (for demo; use persistent store for production)
+processed_files = []
+chat_history = []
+
+
+# Initialize ChromaDB client
+client = chromadb.Client()
+collection = client.get_or_create_collection(name="documents")
+
+
+# Model options (for reference, can be used in frontend)
+MODEL_TEXT_OPTIONS = {
+    "IBM Granite": [
+        "ibm/granite-3-2-8b-instruct",
+        "ibm/granite-3-2b-instruct",
+        "ibm/granite-3-3-8b-instruct",
+        "ibm/granite-3-8b-instruct"
+    ],
+    "Meta (LLaMA)": [
+        "meta-llama/llama-3-2-1b-instruct",
+        "meta-llama/llama-3-2-3b-instruct",
+        "meta-llama/llama-3-3-70b-instruct",
+        "meta-llama/llama-3-405b-instruct",
+        "meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
+    ],
+    "Mistral": [
+        "mistralai/mistral-large",
+        "mistralai/mistral-medium-2505",
+        "mistralai/mistral-small-3-1-24b-instruct-2503"
+    ]
+}
+
+class ChatRequest(BaseModel):
+    api_key: str
+    project_id: str
+    url: str
+    model_id: str
+    message: str
+
+class ChatResponse(BaseModel):
+    answer: str
+    elapsed: float
+    tokens: int
+    speed: float
+    used_chunks: int
+    chat_history: list
+
+class FileSummary(BaseModel):
+    file_name: str
+    chunk_count: int
+
+@app.post("/upload_files")
+async def upload_files(files: List[UploadFile] = File(...)):
+    new_processed = []
+    for uploaded_file in files:
+        file_name = uploaded_file.filename
+        if file_name in [f["metadata"]["file_name"] for f in processed_files]:
+            continue
+        suffix = f".{file_name.split('.')[-1]}"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+            tmp_file.write(await uploaded_file.read())
+            tmp_file_path = tmp_file.name
+        file_extension = file_name.split('.')[-1].lower()
+        if file_extension in ['txt']:
+            file_type = 'txt'
+        elif file_extension in ['pdf']:
+            file_type = 'pdf'
+        elif file_extension in ['docx']:
+            file_type = 'docx'
+        elif file_extension in ['xlsx']:
+            file_type = 'xlsx'
+        elif file_extension in ['png', 'jpg', 'jpeg']:
+            file_type = 'image'
+        else:
+            os.unlink(tmp_file_path)
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
+        try:
+            processed_data = process_file(tmp_file_path, file_type)
+            if processed_data:
+                for item in processed_data:
+                    doc_id = f"{item['metadata']['file_name']}_{item['metadata']['chunk_id']}"
+                    collection.add(
+                        documents=[item['content']],
+                        metadatas=[item['metadata']],
+                        ids=[doc_id]
+                    )
+                processed_files.extend(processed_data)
+                new_processed.extend(processed_data)
+        except Exception as e:
+            os.unlink(tmp_file_path)
+            raise HTTPException(status_code=500, detail=f"Error processing {file_name}: {str(e)}")
+        os.unlink(tmp_file_path)
+    return {"message": "Files processed successfully!", "processed_files": [f["metadata"]["file_name"] for f in new_processed]}
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    if not all([request.api_key, request.project_id, request.model_id]):
+        raise HTTPException(status_code=400, detail="Missing required fields.")
+    if not processed_files:
+        raise HTTPException(status_code=400, detail="No files processed.")
+    chat_history.append({"role": "user", "content": request.message})
+    try:
+        results = collection.query(query_texts=[request.message], n_results=3)
+        context = ""
+        if results['documents'] and results['documents'][0]:
+            context = "Based on the following information from your documents:\n\n"
+            for i, (doc, metadata) in enumerate(zip(results['documents'][0], results['metadatas'][0])):
+                context += f"Document {i+1} ({metadata['file_name']}):\n{doc}\n\n"
+        system_message = "You are a helpful assistant that answers questions based on the provided document context. If the context doesn't contain relevant information, say so clearly."
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": f"{context}\n\nQuestion: {request.message}"}
+        ]
+        credentials = Credentials(url=request.url, api_key=request.api_key)
+        params = TextChatParameters(temperature=0.7)
+        model = ModelInference(
+            model_id=request.model_id,
+            credentials=credentials,
+            project_id=request.project_id,
+            params=params
+        )
+        start_time = time.time()
+        response = model.chat(messages=messages)
+        end_time = time.time()
+        content = response["choices"][0]["message"]["content"]
+        elapsed = end_time - start_time
+        tokens = len(content.split())
+        speed = tokens / elapsed if elapsed > 0 else 0
+        chat_history.append({"role": "assistant", "content": content})
+        num_chunks = len(results['documents'][0]) if results['documents'] and results['documents'][0] else 0
+        return ChatResponse(
+            answer=content,
+            elapsed=elapsed,
+            tokens=tokens,
+            speed=speed,
+            used_chunks=num_chunks,
+            chat_history=chat_history[-10:] # last 10 messages
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/file_summary", response_model=List[FileSummary])
+async def file_summary():
+    summary = {}
+    for item in processed_files:
+        file_name = item["metadata"]["file_name"]
+        if file_name not in summary:
+            summary[file_name] = 0
+        summary[file_name] += 1
+    return [FileSummary(file_name=k, chunk_count=v) for k, v in summary.items()]
+
+@app.post("/clear_chat")
+async def clear_chat():
+    chat_history.clear()
+    return {"message": "Chat history cleared."}
+
+@app.get("/system_info")
+async def system_info():
+    return {"total_indexed_chunks": len(processed_files)}
+
+@app.get("/")
+async def root():
+    return {"message": "You RAG is Working!"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
