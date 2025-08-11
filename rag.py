@@ -122,8 +122,8 @@ async def upload_files(files: List[UploadFile] = File(...)):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    if not all([request.api_key, request.project_id, request.model_id]):
-        raise HTTPException(status_code=400, detail="Missing required fields.")
+    # if not all([request.api_key, request.project_id, request.model_id]):
+    #     raise HTTPException(status_code=400, detail="Missing required fields.")
     # if not processed_files:
     #     raise HTTPException(status_code=400, detail="No files processed.")
     chat_history.append({"role": "user", "content": request.message})
