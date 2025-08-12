@@ -243,7 +243,10 @@ if os.path.exists(static_dir):
 
 @app.get("/ui")
 async def serve_index():
-    return FileResponse('static/index.html')
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return {"error": "index.html not found in static directory"})
 
 # # Render deployment needs access to the app directly
 # # The port is automatically set by Render via the PORT environment variable
@@ -251,6 +254,7 @@ async def serve_index():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
