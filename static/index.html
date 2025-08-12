@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chatbot - OCP Group</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="icon" href="logo.png" type="image/png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <img src="logo.png" alt="RAG Logo" class="logo-image">
+                    <h1>OCP - RAG Chatbot</h1>
+                </div>
+                <p data-i18n="chat-with-docs">Chattez avec vos documents en utilisant l'IA - Q&A</p>
+            </div>
+            <div class="sidebar-content">
+                <div class="settings-group">
+                    <h3 data-i18n="language">Langue</h3>
+                    <div class="language-switcher">
+                        <select id="languageSelector" class="language-select" onchange="switchLanguage(this.value)">
+                            <option value="fr" selected>Français</option>
+                            <option value="en">English</option>
+                        </select>
+                        <div class="select-arrow">
+                            <i class="ri-arrow-down-s-line"></i>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="settings-group">
+                    <h3 data-i18n="upload-docs">Télécharger des Documents</h3>
+                    <button id="uploadBtn" class="btn btn-primary btn-block" onclick="openUploadModal()">
+                        <i class="ri-upload-cloud-2-line"></i> <span data-i18n="upload-docs">Télécharger des Documents</span>
+                    </button>
+                </div>
+                
+                <div class="settings-group">
+                    <h3 data-i18n="files">Les Fichiers</h3>
+                    <ul class="summary-list" id="summaryList"></ul>
+                </div>
+
+                <!-- clear file button -->
+                <div class="settings-group">
+                    <h3 data-i18n="clear-files">Effacer les Fichiers</h3>
+                    <button class="btn btn-danger btn-block" onclick="clearFiles()">
+                        <i class="ri-delete-bin-line"></i> <span data-i18n="clear-files">Effacer les Fichiers</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="main-header">
+                <div class="file-info">
+                    <span id="docCount" class="file-badge">0 documents</span>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-outline" onclick="clearChat()">
+                        <i class="ri-delete-bin-6-line"></i> <span data-i18n="clear-chat">Effacer la discussion</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="chat-container">
+                <div class="chat-messages" id="chatHistory">
+                    <!-- Messages will be inserted here by JavaScript -->
+                </div>
+
+                <div class="quick-buttons" style="padding: 0 30px;">
+                            <button class="quick-query-btn" data-i18n="summarize" id="quickSummarizeBtn">
+                                <i class="ri-file-search-line"></i> Résumer
+                            </button>
+                            <button class="quick-query-btn" data-i18n="important-points" id="quickImportantPointsBtn">
+                                <i class="ri-information-line"></i> Points importants
+                            </button>
+                            <button class="quick-query-btn" data-i18n="extract" id="quickExtractBtn">
+                                <i class="ri-bar-chart-line"></i> Extraire
+                            </button>
+                </div>
+
+               
+                
+                <div class="info-bar" id="infoBar" data-i18n="ready">
+                    Prêt à répondre à vos questions
+                </div>
+                
+                <div class="chat-input-container">
+                    
+                    <div class="chat-input-wrapper">
+                        
+
+                        <input type="text" id="chatInput" class="chat-input" data-i18n-placeholder="ask-question" placeholder="Posez une question sur vos documents..." onkeypress="if(event.key === 'Enter') sendMessage()">
+                        <button class="chat-send-btn" onclick="sendMessage()">
+                            <i class="ri-send-plane-fill"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" data-i18n="upload-documents">Télécharger des Documents</div>
+                <button class="close-btn" onclick="closeUploadModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="file-drop-area" id="dropArea" onclick="document.getElementById('fileInput').click()">
+                    <i class="ri-upload-cloud-2-fill"></i>
+                    <div class="file-drop-message" data-i18n="drop-files">Cliquez ou faites glisser des fichiers pour les télécharger</div>
+                    <div class="file-drop-hint" data-i18n="supported-formats">Formats pris en charge : PDF, DOCX, TXT, XLXS, CSV, PNG...</div>
+                    <input type="file" id="fileInput" multiple style="display: none;" onchange="handleFileSelect()">
+                </div>
+                <div class="file-list" id="fileList">
+                    <!-- Selected files will appear here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="uploadFiles()">
+                    <i class="ri-upload-2-line"></i> <span data-i18n="upload">Télécharger</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // API base URL
+        // Use local proxy for development to bypass CORS issues
+        const API_BASE = "https://rag-api-807h.onrender.com";
+        
+        // Language translations
+        const translations = {
+            fr: {
+                "chat-with-docs": "Q&A - Chattez avec des documents en utilisant l'IA",
+                "language": "Langue",
+                "upload-docs": "Télécharger des Documents",
+                "files": "Les Fichiers",
+                "clear-chat": "Effacer la discussion",
+                "ask-question": "Posez une question sur vos documents...",
+                "ready": "Prêt à répondre à vos questions",
+                "upload-documents": "Télécharger des Documents",
+                "drop-files": "Cliquez ou faites glisser des fichiers pour les télécharger",
+                "supported-formats": "Formats pris en charge : PDF, DOCX, TXT, XLXS, CSV, PNG...",
+                "upload": "Télécharger",
+                "welcome-message": "👋 Bonjour ! Je suis votre assistant RAG d'OCP Group. Téléchargez vos documents et posez-moi des questions à leur sujet pour obtenir des réponses précises.",
+                "uploading": "Téléchargement des fichiers...",
+                "upload-success": "Fichiers téléchargés avec succès !",
+                "upload-error": "Erreur : ",
+                "no-files": "Pas de fichiers sélectionnés",
+                "no-files-processed": "Aucun fichier n'a encore été traité.",
+                "documents": "documents",
+                "chunks": "chunks",
+                "thinking": "Réflexion...",
+                "chat-cleared": "Discussion effacée",
+                "error-loading": "Erreur lors du chargement du résumé.",
+                "summarize": "Résumer",
+                "important-points": "Points importants",
+                "extract": "Extraire",
+                "clear-files": "Effacer les Fichiers"
+
+            },
+            en: {
+                "chat-with-docs": "Q&A - Chat with your documents using AI",
+                "language": "Language",
+                "upload-docs": "Upload Documents",
+                "files": "Files",
+                "clear-chat": "Clear chat",
+                "ask-question": "Ask a question about your documents...",
+                "ready": "Ready to answer your questions",
+                "upload-documents": "Upload Documents",
+                "drop-files": "Click or drag files to upload",
+                "supported-formats": "Supported formats: PDF, DOCX, TXT, XLXS, CSV, PNG...",
+                "upload": "Upload",
+                "welcome-message": "👋 Hello! I'm your RAG assistant from OCP Group. Upload your documents and ask me questions about them for accurate answers.",
+                "uploading": "Uploading files...",
+                "upload-success": "Files uploaded successfully!",
+                "upload-error": "Error: ",
+                "no-files": "No files selected",
+                "no-files-processed": "No files processed yet.",
+                "documents": "documents",
+                "chunks": "chunks",
+                "thinking": "Thinking...",
+                "chat-cleared": "Chat cleared",
+                "error-loading": "Error loading summary.",
+                "summarize": "Summarize",
+                "important-points": "Important Points",
+                "extract": "Extract",
+                "clear-files": "Clear Files"
+
+            }
+        };
+        
+        let currentLang = 'fr';
+        let chatHistory = [];
+        let selectedFiles = [];
+        
+        // Switch language function
+        function switchLanguage(lang) {
+            currentLang = lang;
+
+            // Update active option state
+            document.querySelectorAll('.language-select option').forEach(option => {
+                option.selected = option.value === lang;
+            });
+
+            // Update all text elements with translations
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (translations[lang][key]) {
+                    element.textContent = translations[lang][key];
+                }
+            });
+            
+            // Update placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (translations[lang][key]) {
+                    element.setAttribute('placeholder', translations[lang][key]);
+                }
+            });
+            
+            // Update document language
+            document.documentElement.lang = lang;
+            
+            // Re-render chat to update translations
+            renderChat();
+            
+            // Update UI elements that might be dynamically generated
+            updateFileList();
+            fetchSummary();
+        }
+
+        // Quick query functions for each button in 2 languages
+        document.getElementById('quickSummarizeBtn').addEventListener('click', () => {
+            const query = currentLang === 'fr' ? 
+            'Résumez le document téléchargé dans un format concis et une seule paragraph.' : 
+            'Summarize the uploaded document in a concise format and a single paragraph.';
+            sendQuickQuery(query);
+        });
+
+      
+        document.getElementById('quickImportantPointsBtn').addEventListener('click', () => {
+            const query = currentLang === 'fr' ? 
+            'Résumer les points importants du document téléchargé format bullet points.' : 
+            'Summarize the important points of the uploaded document in bullet point format.';
+            sendQuickQuery(query);
+        });
+
+       
+        document.getElementById('quickExtractBtn').addEventListener('click', () => {
+            const query = currentLang === 'fr' ? 
+            'Donnez-moi une extraction des données clés du document téléchargé dans un format Json structuré.' : 
+            'Give me an extraction of the key data from the uploaded document in a structured JSON format.';
+            sendQuickQuery(query);
+        });
+
+        // Function to send quick queries
+        function sendQuickQuery(query) {
+            document.getElementById('chatInput').value = query;
+            sendMessage();
+        }
+
+        // Upload modal functions
+        function openUploadModal() {
+            document.getElementById('uploadModal').style.display = 'flex';
+        }
+        
+        function closeUploadModal() {
+            document.getElementById('uploadModal').style.display = 'none';
+        }
+
+        function addsmallloaderinModal() {
+
+            // Create loader element
+            const loader = document.createElement('div');
+            loader.className = 'small-loader';
+            loader.innerHTML = '<i class="ri-loader-2-line spin" style="font-size: 24px; color: #085f0c;"></i>';
+            
+            loader.style.marginRight = '10px';
+            loader.style.display = 'inline-block';
+            loader.style.verticalAlign = 'middle';
+
+            // Add loader to the left of the upload button in the modal footer
+            const modalFooter = document.querySelector('#uploadModal .modal-footer');
+            const uploadButton = modalFooter.querySelector('button');
+            modalFooter.insertBefore(loader, uploadButton);
+
+
+        }
+
+        function removesmallloaderinModal() {
+            const loader = document.querySelector('#uploadModal .small-loader');
+            if (loader) {
+                loader.remove();
+            }
+        }
+
+        // Handle file selection
+        function handleFileSelect() {
+            const fileInput = document.getElementById('fileInput');
+            selectedFiles = Array.from(fileInput.files);
+            updateFileList();
+        }
+        
+        // Update file list UI
+        function updateFileList() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            
+            if (selectedFiles.length === 0) {
+                fileList.innerHTML = `<p>${translations[currentLang]['no-files']}</p>`;
+                return;
+            }
+            
+            selectedFiles.forEach(file => {
+                const fileSize = formatFileSize(file.size);
+                fileList.innerHTML += `
+                    <div class="file-item">
+                        <i class="ri-file-text-line file-item-icon"></i>
+                        <div class="file-item-name">${file.name}</div>
+                        <div class="file-item-size">${fileSize}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // Clear processed files
+        async function clearFiles() {
+            const res = await fetch(`${API_BASE}/clear_files`, {
+                method: 'POST'
+            });
+            const data = await res.json();
+            document.getElementById('infoBar').textContent = data.message;
+            fetchSummary();
+        }
+
+        // Upload files
+        async function uploadFiles() {
+            if (selectedFiles.length === 0) {
+                alert(translations[currentLang]['no-files']);
+                return;
+            }
+            
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+            
+            document.getElementById('infoBar').textContent = translations[currentLang]['uploading'];
+            
+            // Close upload modal after 5 seconds regardless of upload status
+            addsmallloaderinModal();
+            setTimeout(() => {
+                removesmallloaderinModal();
+                closeUploadModal();
+            }, 5000);
+            
+            try {
+                // Start upload process but don't wait for it
+                fetch(`${API_BASE}/upload_files`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (res.ok) {
+                        document.getElementById('infoBar').textContent = translations[currentLang]['upload-success'];
+                        fetchSummary();
+                        selectedFiles = [];
+                    } else {
+                        document.getElementById('infoBar').textContent = translations[currentLang]['upload-error'] + (data.detail || 'Upload failed');
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('infoBar').textContent = translations[currentLang]['upload-error'] + err;
+                });
+            } catch (err) {
+                document.getElementById('infoBar').textContent = translations[currentLang]['upload-error'] + err;
+            }
+        }
+
+        // Fetch processed file summary
+        async function fetchSummary() {
+            try {
+                const res = await fetch(`${API_BASE}/file_summary`);
+                const data = await res.json();
+                
+                const list = document.getElementById('summaryList');
+                list.innerHTML = '';
+                
+                if (data.length === 0) {
+                    list.innerHTML = `<li>${translations[currentLang]['no-files-processed']}</li>`;
+                    document.getElementById('docCount').textContent = `0 ${translations[currentLang]['documents']}`;
+                } else {
+                    let totalChunks = 0;
+                    for (let file of data) {
+                        list.innerHTML += `
+                            <div class="file-item">
+                                <i class="ri-file-text-line file-item-icon"></i>
+                                <div class="file-item-name">${file.file_name}</div>
+                                <div class="file-item-size">${file.chunk_count} chunks</div>
+                            </div>
+                        `;
+                        totalChunks += file.chunk_count;
+                    }
+                    document.getElementById('docCount').textContent = `${data.length} ${translations[currentLang]['documents']} (${totalChunks} ${translations[currentLang]['chunks']})`;
+                }
+            } catch (err) {
+                document.getElementById('summaryList').innerHTML = `<li>${translations[currentLang]['error-loading']}</li>`;
+            }
+        }
+
+        // Render chat history
+        function renderChat() {
+            const historyDiv = document.getElementById('chatHistory');
+            historyDiv.innerHTML = '';
+            
+            // Add welcome message
+            historyDiv.innerHTML = `
+                <div class="message assistant">
+                    <div class="message-avatar">
+                        <i class="ri-robot-fill"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-bubble">
+                            ${translations[currentLang]['welcome-message']}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            for (let msg of chatHistory) {
+                const messageHtml = `
+                    <div class="message ${msg.role}">
+                        <div class="message-avatar">
+                            ${msg.role === 'assistant' ? '<i class="ri-robot-fill"></i>' : '<i class="ri-user-fill"></i>'}
+                        </div>
+                        <div class="message-content">
+                            <div class="message-bubble">${msg.content}</div>
+                        </div>
+                    </div>
+                `;
+                historyDiv.innerHTML += messageHtml;
+            }
+            
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        }
+
+        // Send chat message
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            chatHistory.push({ role: 'user', content: message });
+            renderChat();
+            input.value = '';
+            
+            document.getElementById('infoBar').textContent = translations[currentLang]['thinking'];
+            
+            try {
+                const res = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api_key: "",
+                        project_id: "",
+                        url: "",
+                        model_id: "",
+                        message: message
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    chatHistory.push({ role: 'assistant', content: data.answer });
+                    renderChat();
+                    document.getElementById('infoBar').textContent = `⏱ ${data.elapsed.toFixed(2)}s | 🧮 ${data.tokens} tokens | ⚡ ${data.speed.toFixed(2)} tokens/s | 📄 ${data.used_chunks} chunks`;
+                } else {
+                    chatHistory.push({ role: 'assistant', content: translations[currentLang]['upload-error'] + (data.detail || 'Chat failed') });
+                    renderChat();
+                    document.getElementById('infoBar').textContent = translations[currentLang]['upload-error'] + (data.detail || 'Chat failed');
+                }
+            } catch (err) {
+                chatHistory.push({ role: 'assistant', content: translations[currentLang]['upload-error'] + err });
+                renderChat();
+                document.getElementById('infoBar').textContent = translations[currentLang]['upload-error'] + err;
+            }
+        }
+
+        // Clear chat history
+        function clearChat() {
+            chatHistory = [];
+            renderChat();
+            document.getElementById('infoBar').textContent = translations[currentLang]['chat-cleared'];
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set initial language
+            switchLanguage('fr');
+            fetchSummary();
+            
+            // Setup drag and drop
+            const dropArea = document.getElementById('dropArea');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.classList.add('highlight');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('highlight');
+            }
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                selectedFiles = Array.from(files);
+                updateFileList();
+            }
+        });
+    </script>
+</body>
+</html>
