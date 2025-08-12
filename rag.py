@@ -84,10 +84,13 @@ async def upload_files(files: List[UploadFile] = File(...)):
         file_name = uploaded_file.filename
         if file_name in [f["metadata"]["file_name"] for f in processed_files]:
             continue
-        suffix = f".{file_name.split('.')[-1]}"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
-            tmp_file.write(await uploaded_file.read())
-            tmp_file_path = tmp_file.name
+        # Create temp dir to store files with original names
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # Save the file with its original name in the temp directory
+            file_path = os.path.join(tmp_dir, file_name)
+            with open(file_path, "wb") as f:
+                f.write(await uploaded_file.read())
+            tmp_file_path = file_path
         file_extension = file_name.split('.')[-1].lower()
         if file_extension in ['txt']:
             file_type = 'txt'
@@ -119,6 +122,8 @@ async def upload_files(files: List[UploadFile] = File(...)):
             raise HTTPException(status_code=500, detail=f"Error processing {file_name}: {str(e)}")
         os.unlink(tmp_file_path)
     return {"message": "Files processed successfully!", "processed_files": [f["metadata"]["file_name"] for f in new_processed]}
+    
+
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
@@ -230,6 +235,7 @@ async def root():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
