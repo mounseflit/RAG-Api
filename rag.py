@@ -80,6 +80,7 @@ class FileSummary(BaseModel):
     file_name: str
     chunk_count: int
 
+
 @app.post("/upload_files")
 async def upload_files(files: List[UploadFile] = File(...)):
     new_processed = []
@@ -93,39 +94,38 @@ async def upload_files(files: List[UploadFile] = File(...)):
             file_path = os.path.join(tmp_dir, file_name)
             with open(file_path, "wb") as f:
                 f.write(await uploaded_file.read())
-            tmp_file_path = file_path
-        file_extension = file_name.split('.')[-1].lower()
-        if file_extension in ['txt']:
-            file_type = 'txt'
-        elif file_extension in ['pdf']:
-            file_type = 'pdf'
-        elif file_extension in ['docx']:
-            file_type = 'docx'
-        elif file_extension in ['xlsx']:
-            file_type = 'xlsx'
-        elif file_extension in ['png', 'jpg', 'jpeg']:
-            file_type = 'image'
-        else:
-            os.unlink(tmp_file_path)
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
-        try:
-            processed_data = process_file(tmp_file_path, file_type)
-            if processed_data:
-                for item in processed_data:
-                    doc_id = f"{item['metadata']['file_name']}_{item['metadata']['chunk_id']}"
-                    collection.add(
-                        documents=[item['content']],
-                        metadatas=[item['metadata']],
-                        ids=[doc_id]
-                    )
-                processed_files.extend(processed_data)
-                new_processed.extend(processed_data)
-        except Exception as e:
-            os.unlink(tmp_file_path)
-            raise HTTPException(status_code=500, detail=f"Error processing {file_name}: {str(e)}")
-        os.unlink(tmp_file_path)
+            
+            file_extension = file_name.split('.')[-1].lower()
+            if file_extension in ['txt']:
+                file_type = 'txt'
+            elif file_extension in ['pdf']:
+                file_type = 'pdf'
+            elif file_extension in ['docx']:
+                file_type = 'docx'
+            elif file_extension in ['xlsx']:
+                file_type = 'xlsx'
+            elif file_extension in ['png', 'jpg', 'jpeg']:
+                file_type = 'image'
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
+            
+            try:
+                processed_data = process_file(file_path, file_type)
+                if processed_data:
+                    for item in processed_data:
+                        doc_id = f"{item['metadata']['file_name']}_{item['metadata']['chunk_id']}"
+                        collection.add(
+                            documents=[item['content']],
+                            metadatas=[item['metadata']],
+                            ids=[doc_id]
+                        )
+                    processed_files.extend(processed_data)
+                    new_processed.extend(processed_data)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error processing {file_name}: {str(e)}")
+
     return {"message": "Files processed successfully!", "processed_files": [f["metadata"]["file_name"] for f in new_processed]}
-    
+
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -238,6 +238,7 @@ async def root():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
