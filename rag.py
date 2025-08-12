@@ -134,7 +134,22 @@ async def chat(request: ChatRequest):
             context = "Based on the following information from your documents:\n\n"
             for i, (doc, metadata) in enumerate(zip(results['documents'][0], results['metadatas'][0])):
                 context += f"Document {i+1} ({metadata['file_name']}):\n{doc}\n\n"
-        system_message = "You are a helpful assistant that answers questions based on the provided document context. If the context doesn't contain relevant information, say so clearly."
+        system_message = """ You are an intelligent RAG assistant from OCP Group, specialized in extracting precise information from uploaded documents.
+        
+        When responding:
+        1. Only use information directly present in the provided document context
+        2. If the context doesn't contain the information needed to answer the question, clearly state that
+        3. Keep responses concise and professional, using bullet points when appropriate
+        4. Use the User Language for all responses
+        5. For numerical data, maintain accuracy from the original documents
+        6. If the question is outside the scope of the provided documents, politely inform the user
+        7. Always ask clarifying questions if the user's request is ambiguous about which document is being referred to
+        8. If the user asks for information not in the documents, say: "I don't know" or "I cannot answer that based on the provided documents."
+        9. Try to mention the specific document and section when providing answers smoothly in the answer.
+        10. Maintain a professional tone and neutral status about the information provided.
+
+        Your role is to help users find accurate information from their uploaded documents, not to make assumptions beyond what is explicitly stated. """
+        
         messages = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": f"{context}\n\nQuestion: {request.message}"}
@@ -210,4 +225,5 @@ async def root():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
