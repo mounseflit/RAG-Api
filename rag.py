@@ -148,7 +148,7 @@ async def chat(request: ChatRequest):
         9. Try to mention the specific document and section when providing answers smoothly in the answer.
         10. Maintain a professional tone and neutral status about the information provided.
 
-        Your role is to help users find accurate information from their uploaded documents, not to make assumptions beyond what is explicitly stated. """
+        Your role is to help users find accurate information from their uploaded documents, not to make assumptions beyond what is explicitly stated."""
         
         messages = [
             {"role": "system", "content": system_message},
@@ -225,5 +225,6 @@ async def root():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
