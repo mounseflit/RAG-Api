@@ -211,6 +211,11 @@ async def clear_chat():
     chat_history.clear()
     return {"message": "Chat history cleared."}
 
+@app.post("/clear_files")
+async def clear_files():
+    processed_files.clear()
+    return {"message": "Processed files cleared."}
+
 @app.get("/system_info")
 async def system_info():
     return {"total_indexed_chunks": len(processed_files)}
@@ -225,6 +230,7 @@ async def root():
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
