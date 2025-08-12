@@ -14,6 +14,8 @@ from fastapi.responses import RedirectResponse
 import uvicorn
 import python_multipart
 from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 
 app = FastAPI(title="RAG Chatbot with Multi-File Support")
@@ -232,12 +234,24 @@ async def system_info():
 async def root():
     return RedirectResponse(url="/docs")
 
+# Serve static files
+
+# Mount the static directory
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+@app.get("/ui")
+async def serve_index():
+    return FileResponse('static/index.html')
+
 # # Render deployment needs access to the app directly
 # # The port is automatically set by Render via the PORT environment variable
 # if __name__ == "__main__":
 
 #     port = int(os.environ.get("PORT", 8000))
 #     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
